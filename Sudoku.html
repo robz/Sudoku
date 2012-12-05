@@ -1,0 +1,391 @@
+<html>
+<script>
+var MIN_ITERATIONS = 10, MAX_TRIES = 100;
+
+var canvas, context;
+var CANVAS_WIDTH, CANVAS_HEIGHT;
+var board;
+
+window.onload = function() {
+	canvas = document.getElementById("canvas");
+	context = canvas.getContext("2d");
+	CANVAS_WIDTH = canvas.width;
+	CANVAS_HEIGHT = canvas.height;
+	
+	board = new Array(9);
+	for (var r = 0; r < 9; r++) {
+		board[r] = new Array(9);
+		for (var c = 0; c < 9; c++) {
+			board[r][c] = 0;
+		}
+	}
+	
+	do {
+		fillBoard(board);
+		var success = buildGaps(board, MIN_ITERATIONS, MAX_TRIES);
+	} while (!success);
+	
+	drawBoard(board);
+}
+
+function onbuttonpress() {
+	tryToSolve(board);
+	drawBoard(board);
+}
+
+function makeFlagsGrid() {
+	var flags = new Array(9);
+	
+	for (var i = 1; i < 10; i++) {
+		flags[i] = new Array(9);
+		for (var r = 0; r < 9; r++) {
+			flags[i][r] = new Array(9);
+			for (var c = 0; c < 9; c++) {
+				flags[i][r][c] = false;
+			}
+		}
+	}
+	
+	return flags;
+}
+
+var squareToCoordsMap = [
+	[0, 0],
+	[0, 3],
+	[0, 6],
+	[3, 0],
+	[3, 3],
+	[3, 6],
+	[6, 0],
+	[6, 3],
+	[6, 6]
+];
+
+function squareCoords(s) {
+	return squareToCoordsMap[s];
+}
+
+function squareContains(board, s, n) {
+	var scoords = squareCoords(s),
+		srow = scoords[0],
+		scol = scoords[1];
+		
+	for (var r = 0; r < 3; r++) {
+		for (var c = 0; c < 3; c++) {
+			if (board[r+srow][c+scol] == n) {
+				return [r+srow, c+scol];
+			}
+		}
+	}
+	
+	return false;
+}
+
+function setWholeSquare(flags, s, n) {
+	var scoords = squareCoords(s),
+		srow = scoords[0],
+		scol = scoords[1];
+		
+	for (var r = 0; r < 3; r++) {
+		for (var c = 0; c < 3; c++) {
+			flags[n][r+srow][c+scol] = true;
+		}
+	}
+}
+
+function setWholeRow(flags, row, n) {
+	for (var c = 0; c < 9; c++) {
+		flags[n][row][c] = true;
+	}
+}
+
+function setWholeColumn(flags, col, n) {
+	for (var r = 0; r < 9; r++) {
+		flags[n][r][col] = true;
+	}
+}
+
+function setPartialSquare(board, flags, s, n) {
+	var scoords = squareCoords(s),
+		srow = scoords[0],
+		scol = scoords[1];
+		
+	for (var r = 0; r < 3; r++) {
+		for (var c = 0; c < 3; c++) {
+			if (board[r+srow][c+scol] != 0) {
+				flags[n][r+srow][c+scol] = true;
+			} 
+		}
+	}
+}
+
+function oneLeft(flags, s, n) {
+	var scoords = squareCoords(s),
+		srow = scoords[0],
+		scol = scoords[1];
+	
+	var last_coord = null, 
+		count = 0;
+	
+	for (var r = 0; r < 3; r++) {
+		for (var c = 0; c < 3; c++) {
+			if (!flags[n][r+srow][c+scol]) {
+				last_coord = [r+srow, c+scol];
+				count++;
+			}
+		}
+	}
+	
+	if (count == 1) {
+		return last_coord;
+	}
+	
+	return false;
+}
+
+function isComplete(board) {
+	for (var r = 0; r < 9; r++) {
+		for (var c = 0; c < 9; c++) {
+			if (board[r][c] == 0) {
+				return false;
+			}
+		}
+	}
+	
+	return true;
+}
+
+function tryToSolve(board) {
+	var flags = makeFlagsGrid();
+	
+	//
+	// iterate over each number
+	//   iterate over each square
+	//     does the square contain the number?
+	//     if so: 
+	//       fill in the square's flags with true
+	//       fill in all the flags for that row and column
+	//     otherwise:
+	//       fill in the square's flags with true
+	//       	where other numbers are
+	//   iterate over each square
+	//     if there is one one cell in the square that is false:
+	//       set that cell to the number
+	// repeat if any cell's number has been set
+	//
+	
+	var iterations = 0;
+	
+	do {
+		var made_progress = false;
+		
+		for (var n = 1; n < 10; n++) {
+			for (var s = 0; s < 9; s++) {
+				var cell = squareContains(board, s, n);
+				
+				if (cell) {
+					setWholeSquare(flags, s, n);
+					setWholeRow(flags, cell[0], n);
+					setWholeColumn(flags, cell[1], n);
+				} else {
+					setPartialSquare(board, flags, s, n);
+				}
+			}
+			
+			for (var s = 0; s < 9; s++) {
+				var cell = oneLeft(flags, s, n);
+				
+				if (cell) {
+					board[cell[0]][cell[1]] = n;
+					flags[n][cell[0]][cell[1]] = true;
+					made_progress = true;
+				}
+			}
+		}
+		
+		iterations++;
+	} while (made_progress);
+	
+	if (isComplete(board)) {
+		return iterations;
+	}
+	
+	return 0;
+}
+
+function copyInto(orig, copy) {
+	for (var r = 0; r < 9; r++) {
+		for (var c = 0; c < 9; c++) {
+			copy[r][c] = orig[r][c];
+		}
+	}
+}
+
+function removeRandom(board) {
+	var r = -1, c = -1;
+
+	do {
+		r = randNum()-1; 
+		c = randNum()-1;
+	} while (board[r][c] == 0);
+	
+	board[r][c] = 0;
+	return [r,c];
+}
+
+function buildGaps(board, min_iterations, max_tries) {
+	var copy = new Array(9);
+	for (var r = 0; r < 9; r++) {
+		copy[r] = new Array(9);
+		for (var c = 0; c < 9; c++) {
+			copy[r][c] = board[r][c];
+		}
+	}
+	
+	var count = 0;
+	do {
+		if (count > max_tries) {
+			break;
+		}
+		
+		copyInto(copy, board);
+		var data = buildGapsAux(board);
+		var iterations = data[0],
+			num_gaps = data[1];
+		
+		// console.log("making "+num_gaps+" gaps took me "+iterations+" iterations to solve!");
+		
+		count++;
+	} while (iterations < min_iterations);
+	
+	return  count <= max_tries;
+}
+
+function buildGapsAux(board) {
+	var copy = new Array(9);
+	for (var r = 0; r < 9; r++) {
+		copy[r] = new Array(9);
+		for (var c = 0; c < 9; c++) {
+			copy[r][c] = 0;
+		}
+	}
+	
+	var iterations = 1,
+		prev_iterations = 1,
+		count = 0;
+		
+	while (iterations > 0) {
+		prev_iterations = iterations;
+	
+		copyInto(board, copy);
+		var square = removeRandom(copy);
+		iterations = tryToSolve(copy);
+		
+		if (iterations > 0) {
+			board[square[0]][square[1]] = 0;
+		}
+		
+		count++;
+	}
+	
+	return [prev_iterations, count];
+}
+
+function randNum() { return Math.floor(Math.random()*9)+1; }
+
+var boxindexmap = [
+	[0, 1, 2],
+	[3, 4, 5],
+	[6, 7, 8]
+];
+
+function boxIndex(row, col) {
+	return boxindexmap[Math.floor(row/3)][Math.floor(col/3)];
+}
+
+function fillBoard(board) {
+	var max_tries = 10000;
+	var count = 0;
+	
+	do {
+		var success = fillBoardAux(board);
+		count++;
+	} while(!success && count < max_tries);
+	
+	if (count < max_tries) {
+		console.log("fill succeeded after "+count+" tries!");
+	} else {
+		console.log("fill failed!");
+	}
+}
+
+function fillBoardAux(board) {
+	var rowbags = [{},{},{},{},{},{},{},{},{}],
+		colbags = [{},{},{},{},{},{},{},{},{}],
+		boxbags = [{},{},{},{},{},{},{},{},{}];
+	
+	for (var r = 0; r < 9; r++) {
+		for (var c = 0; c < 9; c++) {
+			var n = randNum();
+			var count = 0;
+			var bi = boxIndex(r,c);
+			
+			while (rowbags[r][n] || colbags[c][n] || boxbags[bi][n]) {
+				n = randNum();
+				count++;
+				if (count > 30) {
+					return false;
+				}
+			}
+			
+			board[r][c] = n;
+			rowbags[r][n] = true;
+			colbags[c][n] = true;
+			boxbags[bi][n] = true;
+		}
+	}
+	
+	return true;
+}
+
+function drawBoard(board) {
+	context.fillStyle = "gray";
+	context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+	
+	context.fillStyle = "black";
+	var rinc = CANVAS_WIDTH/9,
+		cinc = CANVAS_HEIGHT/9;
+	
+	context.font = "bold 18px courier-new";
+		
+	for (var r = 0; r < 9; r++) {
+		for (var c = 0; c < 9; c++) {
+			if (board[r][c] != 0) {
+				context.fillText(""+board[r][c], c*cinc+15, r*rinc+rinc/2);
+			}
+		}
+	}
+	
+	for (var r = 0; r <= 9; r++) {
+		context.lineWidth = (r%3 == 0) ? 5 : 1;
+		context.beginPath();
+		context.moveTo(0, r*rinc);
+		context.lineTo(CANVAS_WIDTH, r*rinc);
+		context.stroke();
+	}
+	
+	for (var c = 0; c <= 9; c++) {
+		context.lineWidth = (c%3 == 0) ? 5 : 1;
+		context.beginPath();
+		context.moveTo(c*cinc, 0);
+		context.lineTo(c*cinc, CANVAS_HEIGHT);
+		context.stroke();
+	}
+}
+</script>
+<body style="text-align: center;">
+<canvas id="canvas" width=400 height=400></canvas>
+<br/>
+<button onclick=onbuttonpress()>solve</button>
+</body>
+</html>
